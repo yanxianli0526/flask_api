@@ -1,14 +1,21 @@
 # Reference
 # https://medium.com/@twilightlau94/rest-apis-with-flask-%E7%B3%BB%E5%88%97%E6%95%99%E5%AD%B8%E6%96%87-1-5405216d3166
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request,make_response                                                                                         
 from config import *
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
 app.config.from_object(__name__)
 
 app.config["JSON_AS_ASCII"] = False
 
+limiter = Limiter(
+    app,
+    key_func=get_remote_address,  # 根據訪問者的IP記錄訪問次數
+    default_limits=["2000 per day", "200 per hour","50/minute","2/second"]  # 限制訪問次數
+)
 
 # default data
 stores = [{
@@ -20,6 +27,12 @@ stores = [{
     'items': [{'name': 'my item 2', 'price': 15}]
 }
 ]
+
+# 超過次數限制顯示 return內容  (429可修改內容)
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    return  make_response(jsonify(error="ratelimit exceeded %s" % e.description),429)
+
 
 # get /store/<name> data: {name :}   http://127.0.0.1:8081/store/first
 @app.route('/store/<string:name>', methods=['GET'])
@@ -34,6 +47,8 @@ def get_store(name):
 # get /store   http://127.0.0.1:8081/store
 @app.route('/store', methods=['GET'])
 def get_stores():
+    user_ip = request.remote_addr
+    print(user_ip)
     return jsonify(stores)
 
 # get /store   http://127.0.0.1:8081/credit_card  測試查詢信用卡表  裡面有更新跟新增的測試
@@ -66,7 +81,7 @@ def get_data3():
     # 取得get key 為name的val
     name = request.args.get("name")
     db = SQLManager()
-    citys = db.get_list("SELECT * FROM `credit_card` WHERE bonus_2 = %s",name)
+    citys = db.get_list("SELECT * FROM `credit_card` WHERE bonus_2 = %s", name)
     db.close()
     return jsonify(citys)
 
@@ -112,4 +127,4 @@ def get_item_in_store(name):
 # export FLASK_ENV=development
 # flask run
 # flask run
-app.run(host='0.0.0.0', port=80, debug=True)
+app.run(host='0.0.0.0', port=8081, debug=True)
